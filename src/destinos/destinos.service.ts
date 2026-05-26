@@ -1,10 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreateDestinoDto } from './dto/create-destino.dto';
+// Importamos también Atractivo
+import { Atractivo } from './entities/atractivo.entity';
 import { Destino } from './entities/destino.entity';
 import { EstadoAprobacion } from '../comun/enums/estado.enum';
-import { Imagen } from '../comun/images/imagen.entity'; // <-- RUTA CORREGIDA
+import { Imagen } from '../comun/images/imagen.entity';
 
 @Injectable()
 export class DestinosService {
@@ -12,46 +15,49 @@ export class DestinosService {
     @InjectRepository(Destino)
     private readonly destinoRepository: Repository<Destino>,
 
+    @InjectRepository(Atractivo) // 💡 Inyectamos el repositorio de Atractivos
+    private readonly atractivoRepository: Repository<Atractivo>,
+
     @InjectRepository(Imagen)
     private readonly imagenRepository: Repository<Imagen>,
   ) {}
 
-  // 1. CREAR DESTINO (Entra como pendiente)
-  async create(createDestinoDto: CreateDestinoDto) {
-    const { imagenes_urls, id_dep, ...destinoData } = createDestinoDto;
+  // ==========================================
+  // 1. DESTINOS
+  // ==========================================
 
+  // CREAR DESTINO (TODO EN UNO: Datos + Foto Física)
+  async create(data: any, file?: Express.Multer.File) {
     const nuevoDestino = this.destinoRepository.create({
-      ...destinoData,
-      departamento: { id_dep: id_dep },
+      nombre: data.nombre,
+      descripcion_general: data.descripcion_general,
+      estado: data.estado || EstadoAprobacion.APROBADO,
+      departamento: { id_dep: Number(data.id_dep) },
     });
 
     const destinoGuardado = await this.destinoRepository.save(nuevoDestino);
 
-    // Guardar las imágenes si existen
-    if (imagenes_urls && imagenes_urls.length > 0) {
-      const imagenesParaGuardar = imagenes_urls.map((url) => {
-        return this.imagenRepository.create({
-          url: url,
-          destino: destinoGuardado,
-        });
+    // Si llegó una foto, la guardamos
+    if (file) {
+      const nuevaImagen = this.imagenRepository.create({
+        url: `/uploads/${file.filename}`,
+        destino: { id_d: destinoGuardado.id_d },
       });
-      await this.imagenRepository.save(imagenesParaGuardar);
+      await this.imagenRepository.save(nuevaImagen);
     }
 
     return destinoGuardado;
   }
 
-  // 2. LISTAR TODOS LOS DESTINOS (Para el catálogo del frontend)
+  // LISTAR TODOS LOS DESTINOS (Catálogo)
   async findAll() {
     return await this.destinoRepository.find({
-      // ¡SOLO MOSTRAMOS LOS APROBADOS!
       where: { estado: EstadoAprobacion.APROBADO },
-      // ¡AÑADIMOS LAS IMÁGENES A LA RESPUESTA!
       relations: ['departamento', 'atractivos', 'mesesIdeales', 'imagenes'],
     });
   }
 
-  // 3. CALCULAR PRESUPUESTO PROMEDIO
+  // CALCULAR PRESUPUESTO PROMEDIO
   async obtenerPresupuestoSugerido(id_destino: number) {
     const destino = await this.destinoRepository.findOne({
       where: { id_d: id_destino },
@@ -81,7 +87,7 @@ export class DestinosService {
     };
   }
 
-  // 4. FUNCIÓN PARA EL ADMIN: Aprobar un destino propuesto
+  // APROBAR DESTINO
   async aprobar(id_destino: number) {
     const destino = await this.destinoRepository.findOne({
       where: { id_d: id_destino },
@@ -93,5 +99,129 @@ export class DestinosService {
 
     destino.estado = EstadoAprobacion.APROBADO;
     return await this.destinoRepository.save(destino);
+  }
+
+  // GUARDAR URL IMAGEN FÍSICA A DESTINO
+  async guardarUrlImagen(id_destino: number, url: string) {
+    const destino = await this.destinoRepository.findOne({
+      where: { id_d: id_destino },
+    });
+
+    if (!destino) {
+      throw new NotFoundException(`El destino con ID ${id_destino} no existe.`);
+    }
+
+    const nuevaImagen = this.imagenRepository.create({
+      url: url,
+      destino: destino,
+    });
+
+    await this.imagenRepository.save(nuevaImagen);
+    return { message: 'Imagen física subida y enlazada', url_guardada: url };
+  }
+
+  // LISTAR TODOS (ADMIN)
+  async findAllAdmin() {
+    return await this.destinoRepository.find({
+      relations: ['departamento', 'imagenes'],
+    });
+  }
+
+  // ACTUALIZAR DESTINO
+  async updateDestino(id_destino: number, updateData: Record<string, any>) {
+    const destino = await this.destinoRepository.findOne({
+      where: { id_d: id_destino },
+    });
+
+    if (!destino) {
+      throw new NotFoundException('Destino no encontrado');
+    }
+
+    if (updateData.nombre) destino.nombre = updateData.nombre;
+    if (updateData.descripcion_general)
+      destino.descripcion_general = updateData.descripcion_general;
+    if (updateData.estado) destino.estado = updateData.estado;
+
+    return await this.destinoRepository.save(destino);
+  }
+
+  // ELIMINAR IMAGEN
+  async eliminarImagen(id_img: number) {
+    const imagen = await this.imagenRepository.findOne({
+      where: { id_img: id_img },
+    });
+    if (!imagen) {
+      throw new NotFoundException('Imagen no encontrada');
+    }
+    await this.imagenRepository.remove(imagen);
+    return { message: 'Imagen borrada de la base de datos' };
+  }
+
+  // OBTENER DETALLE DESTINO
+  async findOne(id_destino: number) {
+    const destino = await this.destinoRepository.findOne({
+      where: { id_d: id_destino },
+      relations: [
+        'departamento',
+        'imagenes',
+        'atractivos',
+        'atractivos.imagenes',
+        'mesesIdeales',
+        'experiencias',
+        'experiencias.usuario',
+      ],
+    });
+
+    if (!destino) {
+      throw new NotFoundException(`El destino con ID ${id_destino} no existe.`);
+    }
+    return destino;
+  }
+
+  // ==========================================
+  // 2. ATRACTIVOS (Lógica Unificada)
+  // ==========================================
+
+  async findAllAtractivos() {
+    return await this.atractivoRepository.find({
+      relations: ['destino', 'imagenes'],
+    });
+  }
+
+  // CREAR ATRACTIVO (TODO EN UNO)
+  async crearAtractivo(data: any, file?: Express.Multer.File) {
+    const nuevoAtractivo = this.atractivoRepository.create({
+      nombre: data.nombre,
+      descripcion: data.descripcion,
+      estado: data.estado || EstadoAprobacion.APROBADO,
+      destino: { id_d: Number(data.id_destino) },
+    });
+
+    const guardado = await this.atractivoRepository.save(nuevoAtractivo);
+
+    if (file) {
+      const nuevaImagen = this.imagenRepository.create({
+        url: `/uploads/${file.filename}`,
+        atractivo: { id_at: guardado.id_at },
+      });
+      await this.imagenRepository.save(nuevaImagen);
+    }
+    return guardado;
+  }
+
+  async actualizarAtractivo(id: number, updateData: any) {
+    await this.atractivoRepository.update(id, {
+      nombre: updateData.nombre,
+      descripcion: updateData.descripcion,
+      estado: updateData.estado,
+    });
+    return { success: true };
+  }
+
+  async eliminarAtractivo(id: number) {
+    // 💡 Primero borramos sus imágenes por restricción de Llave Foránea
+    await this.imagenRepository.delete({ atractivo: { id_at: id } });
+    await this.atractivoRepository.delete(id);
+    return { success: true };
   }
 }

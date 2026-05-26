@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ServeStaticModule } from '@nestjs/serve-static'; // <-- 1. NUEVO IMPORT
+import { join } from 'path'; // <-- 2. NUEVO IMPORT
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DestinosModule } from './destinos/destinos.module';
@@ -24,12 +27,18 @@ import { PlanesModule } from './planes/planes.module';
         type: 'mysql',
         host: configService.get<string>('DB_HOST'),
         port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USER'), // <-- Fallback de seguridad
+        username: configService.get<string>('DB_USER'),
         password: configService.get<string>('DB_PASS'),
-        database: configService.get<string>('DB_NAME'), // <-- Fallback de seguridad
+        database: configService.get<string>('DB_NAME'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: false, // Se mantiene en false
       }),
+    }),
+
+    // 3. MAGIA PARA LAS FOTOS: Hacemos pública la carpeta "uploads"
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'), // Sube un nivel desde src y busca 'uploads'
+      serveRoot: '/uploads/', // La URL pública será: http://localhost:3000/uploads/foto.jpg
     }),
 
     DestinosModule,

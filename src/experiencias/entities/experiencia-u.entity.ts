@@ -32,7 +32,7 @@ export class ExperienciaU {
   @JoinColumn({ name: 'id_usuario' })
   usuario!: Usuario;
 
-  @ManyToOne(() => Destino)
+  @ManyToOne(() => Destino, (destino) => destino.experiencias)
   @JoinColumn({ name: 'id_destino' })
   destino!: Destino;
 

@@ -13,6 +13,7 @@ import { Atractivo } from './atractivo.entity';
 import { Mes } from './mes.entity';
 import { EstadoAprobacion } from '../../comun/enums/estado.enum'; // <-- IMPORTAR
 import { Imagen } from '../../comun/entities/imagen.entity'; // <-- IMPORTAR
+import { ExperienciaU } from '../../experiencias/entities/experiencia-u.entity';
 
 @Entity('destinos')
 export class Destino {
@@ -50,4 +51,7 @@ export class Destino {
 
   @OneToMany(() => Imagen, (imagen) => imagen.destino)
   imagenes!: Imagen[];
+
+  @OneToMany(() => ExperienciaU, (experiencia) => experiencia.destino)
+  experiencias!: ExperienciaU[];
 }

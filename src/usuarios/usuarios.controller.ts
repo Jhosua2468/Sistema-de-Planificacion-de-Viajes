@@ -25,4 +25,39 @@ export class UsuariosController {
   findOne(@Param('id') id: string) {
     return this.usuariosService.findOne(+id);
   }
+
+  // CAMBIAR LA CONTRASEÑA
+  @Post('resetear-password')
+  async resetearPassword(
+    @Body() datos: { email: string; codigo: string; nuevaPassword: string },
+  ) {
+    return this.usuariosService.resetearPasswordConCodigo(
+      datos.email,
+      datos.codigo,
+      datos.nuevaPassword,
+    );
+  }
+
+  // SOLICITAR RECUPERACIÓN DE CONTRASEÑA (CORREO REAL)
+  @Post('recuperar-password')
+  async solicitarRecuperacion(@Body('email') email: string) {
+    const usuario = await this.usuariosService.findByEmail(email);
+    if (!usuario) {
+      return { message: 'Si el correo existe, enviaremos un código.' };
+    }
+
+    // 1. Generamos el PIN de 6 dígitos
+    const pin = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 2. Lo guardamos en la base de datos
+    await this.usuariosService.guardarCodigoRecuperacion(usuario.id_u, pin);
+
+    // 3. ENVIAMOS EL CORREO REAL
+    await this.usuariosService.enviarCorreoRecuperacion(usuario.email, pin);
+
+    // 4. Respondemos al frontend (Ya no mandamos el PIN de vuelta por seguridad)
+    return {
+      message: 'Código generado y enviado al correo con éxito',
+    };
+  }
 }

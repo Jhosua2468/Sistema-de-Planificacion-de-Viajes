@@ -24,6 +24,10 @@ export class Usuario {
   @Column({ nullable: true }) // Opcional, puede ser null
   url_foto?: string;
 
+  //###################################################
+  // PIN de recuperación de contraseña (Simulador)
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  codigo_recuperacion?: string | null;
   // Relaciones
   @OneToMany(() => PlanViaje, (plan) => plan.usuario)
   planes!: PlanViaje[];
