@@ -224,4 +224,19 @@ export class DestinosService {
     await this.atractivoRepository.delete(id);
     return { success: true };
   }
+
+  // GUARDAR URL IMAGEN FÍSICA A ATRACTIVO
+  async guardarUrlImagenAtractivo(id_atractivo: number, url: string) {
+    const atractivo = await this.atractivoRepository.findOne({
+      where: { id_at: id_atractivo },
+    });
+    if (!atractivo) throw new NotFoundException('Atractivo no existe');
+
+    const nuevaImagen = this.imagenRepository.create({
+      url: url,
+      atractivo: atractivo,
+    });
+    await this.imagenRepository.save(nuevaImagen);
+    return { message: 'Imagen enlazada al atractivo', url_guardada: url };
+  }
 }

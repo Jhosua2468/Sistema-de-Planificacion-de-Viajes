@@ -85,22 +85,29 @@ export class PlanesService {
 
         if (experiencias && experiencias.length > 0) {
           const idsExperiencias = experiencias.map((e) => e.id_exp);
+
+          // 💡 CAMBIO 1: Añadimos COUNT(DISTINCT id_experiencia) a la consulta SQL
           const costosCategoria: any[] =
             await this.planRepository.manager.query(
-              `SELECT categoria, SUM(monto) as total FROM costos_detalle WHERE id_experiencia IN (?) GROUP BY categoria`,
+              `SELECT categoria, SUM(monto) as total, COUNT(DISTINCT id_experiencia) as cantidad_experiencias 
+             FROM costos_detalle 
+             WHERE id_experiencia IN (?) 
+             GROUP BY categoria`,
               [idsExperiencias],
             );
 
           costosCategoria.forEach((c) => {
-            const prom = Number(c.total || 0) / experiencias.length;
+            // 💡 CAMBIO 2: Dividimos solo entre la cantidad de experiencias que tienen este gasto
+            const prom =
+              Number(c.total || 0) / Number(c.cantidad_experiencias || 1);
+
             // 💡 Normalizamos strings por si en la BD hay acentos o minúsculas
             const cat = c.categoria.toLowerCase();
             if (cat.includes('transporte')) t += prom;
             else if (cat.includes('hospedaje')) h += prom;
-            else if (cat.includes('alimenta'))
-              a += prom; // Cubre Alimentación y Alimentacion
+            else if (cat.includes('alimenta')) a += prom;
             else if (cat.includes('actividad')) ac += prom;
-            else o += prom;
+            else o += prom; // Aquí entran los taxis locales, snacks, etc.
           });
         } else {
           // 💡 Valores base de respaldo (Por día)
@@ -146,11 +153,34 @@ export class PlanesService {
     };
   }
 
-  // 4. ACTUALIZAR
+  // // 4. ACTUALIZAR
+  // async update(id: number, updatePlanDto: UpdatePlanDto) {
+  //   const plan = await this.findOne(id);
+  //   const planActualizado = this.planRepository.merge(plan, updatePlanDto);
+  //   return await this.planRepository.save(planActualizado);
+  // }
+
+  // 4. ACTUALIZAR (Versión Segura y Manual)
   async update(id: number, updatePlanDto: UpdatePlanDto) {
-    const plan = await this.findOne(id);
-    const planActualizado = this.planRepository.merge(plan, updatePlanDto);
-    return await this.planRepository.save(planActualizado);
+    // 1. Buscamos el plan
+    const plan = await this.planRepository.findOne({ where: { id_plan: id } });
+
+    if (!plan) {
+      throw new NotFoundException(`Plan con ID ${id} no encontrado`);
+    }
+
+    // 2. Actualizamos solo los campos que existen en el DTO
+    // Esto evita errores si llegan campos nulos o relaciones no deseadas
+    if (updatePlanDto.nombre_viaje)
+      plan.nombre_viaje = updatePlanDto.nombre_viaje;
+    if (updatePlanDto.fecha_inicio)
+      plan.fecha_inicio = updatePlanDto.fecha_inicio;
+    if (updatePlanDto.fecha_fin) plan.fecha_fin = updatePlanDto.fecha_fin;
+    if (updatePlanDto.estado) plan.estado = updatePlanDto.estado;
+    if (updatePlanDto.visibilidad) plan.visibilidad = updatePlanDto.visibilidad;
+
+    // 3. Guardamos y retornamos
+    return await this.planRepository.save(plan);
   }
 
   // 5. ELIMINAR PLAN
