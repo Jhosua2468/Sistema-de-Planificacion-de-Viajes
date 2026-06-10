@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Patch,
+} from '@nestjs/common';
 import { UsuariosService } from './usuarios.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { LoginDto } from './dto/login.dto';
@@ -59,5 +67,15 @@ export class UsuariosController {
     return {
       message: 'Código generado y enviado al correo con éxito',
     };
+  }
+
+  @Patch(':id/rol')
+  cambiarRol(@Param('id') id: string, @Body('rol') nuevoRol: string) {
+    return this.usuariosService.cambiarRol(+id, nuevoRol);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.usuariosService.remove(+id);
   }
 }

@@ -164,4 +164,27 @@ export class UsuariosService {
     // 3. Enviamos el correo
     await transporter.sendMail(mailOptions);
   }
+
+  // Cambiar rol
+  async cambiarRol(id: number, nuevoRol: string) {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id_u: id },
+    });
+    if (!usuario) {
+      throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
+    }
+    usuario.rol = nuevoRol;
+    return await this.usuarioRepository.save(usuario);
+  }
+
+  // Eliminar usuario
+  async remove(id: number) {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id_u: id },
+    });
+    if (!usuario) {
+      throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
+    }
+    return await this.usuarioRepository.remove(usuario);
+  }
 }

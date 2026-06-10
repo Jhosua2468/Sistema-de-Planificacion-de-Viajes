@@ -1,0 +1,38 @@
+name: CD - Despliegue Backend a EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Conectar por SSH y Desplegar
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # 1. Entrar a la carpeta del proyecto
+            cd Sistema-de-Planificacion-de-Viajes
+            
+            # 2. Descargar el código más reciente de GitHub
+            git pull origin main
+            
+            # 3. Construir el archivo .env con los secretos de GitHub
+            echo "DB_HOST=${{ secrets.DB_HOST }}" > .env
+            echo "DB_PORT=${{ secrets.DB_PORT }}" >> .env
+            echo "DB_USER=${{ secrets.DB_USER }}" >> .env
+            echo "DB_PASS=${{ secrets.DB_PASS }}" >> .env
+            echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            echo "PORT=3000" >> .env
+            
+            # 4. Instalar dependencias, compilar y reiniciar el servidor PM2
+            npm install
+            npm run build
+            pm2 restart api-viajes
+            pm2 save
