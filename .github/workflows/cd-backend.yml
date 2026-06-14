@@ -1,4 +1,4 @@
-name: CD - Despliegue Backend a EC2
+name: CD - Backend Docker a EC2
 
 on:
   push:
@@ -9,30 +9,59 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Conectar por SSH y Desplegar
+      - name: 1. Descargar codigo
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 3. Iniciar sesion en Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 4. Construir y subir imagen Docker a ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: api-viajes-repo
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: 5. Conectar a EC2 y desplegar el contenedor
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: ECR_REGISTRY,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION
           script: |
-            # 1. Entrar a la carpeta del proyecto
-            cd Sistema-de-Planificacion-de-Viajes
+            # A. Autenticar la EC2 con Amazon ECR para poder descargar
+            export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+            export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+            export AWS_DEFAULT_REGION=$AWS_REGION
+            aws ecr get-login-password --region $AWS_REGION | sudo docker login --username AWS --password-stdin $ECR_REGISTRY
             
-            # 2. Descargar el código más reciente de GitHub
-            git pull origin main
+            # B. Descargar la imagen fresca desde ECR
+            sudo docker pull $ECR_REGISTRY/api-viajes-repo:latest
             
-            # 3. Construir el archivo .env con los secretos de GitHub
-            echo "DB_HOST=${{ secrets.DB_HOST }}" > .env
-            echo "DB_PORT=${{ secrets.DB_PORT }}" >> .env
-            echo "DB_USER=${{ secrets.DB_USER }}" >> .env
-            echo "DB_PASS=${{ secrets.DB_PASS }}" >> .env
-            echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
-            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-            echo "PORT=3000" >> .env
+            # C. LA TRANSICIÓN: Apagar el viejo PM2 para siempre
+            pm2 stop api-viajes || true
+            pm2 delete api-viajes || true
+            pm2 save || true
             
-            # 4. Instalar dependencias, compilar y reiniciar el servidor PM2
-            npm install
-            npm run build
-            pm2 restart api-viajes
-            pm2 save
+            # D. Limpiar el contenedor viejo si existía
+            sudo docker stop api-viajes-container || true
+            sudo docker rm api-viajes-container || true
+            
+            # E. Iniciar el nuevo contenedor conectando el puerto 3000 y el archivo .env
+            sudo docker run -d --name api-viajes-container --restart always -p 3000:3000 --env-file /home/ubuntu/Sistema-de-Planificacion-de-Viajes/.env $ECR_REGISTRY/api-viajes-repo:latest
