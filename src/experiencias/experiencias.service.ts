@@ -6,12 +6,15 @@ import { CreateExperienciaDto } from './dto/create-experiencia.dto';
 import { ExperienciaU } from './entities/experiencia-u.entity';
 import { UpdateExperienciaDto } from './dto/update-experiencia.dto';
 import { DataSource } from 'typeorm';
+import { Comentario } from './entities/comentario.entity';
 
 @Injectable()
 export class ExperienciasService {
   constructor(
     @InjectRepository(ExperienciaU)
     private readonly experienciaRepository: Repository<ExperienciaU>,
+    @InjectRepository(Comentario)
+    private readonly comentarioRepository: Repository<Comentario>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -24,13 +27,14 @@ export class ExperienciasService {
     try {
       // A. Crear la Experiencia Principal
       const resultExp = await queryRunner.query(
-        `INSERT INTO experiencias_u (resumen_experiencia, fecha_viaje, id_usuario, id_destino) 
-         VALUES (?, ?, ?, ?)`,
+        `INSERT INTO experiencias_u (resumen_experiencia, fecha_viaje, id_usuario, id_destino, dias_estadia) 
+         VALUES (?, ?, ?, ?, ?)`,
         [
           createDto.resumen_experiencia,
-          createDto.fecha_viaje || new Date().toISOString().split('T')[0], // Usa hoy si no viene fecha
+          createDto.fecha_viaje || new Date().toISOString().split('T')[0],
           createDto.id_usuario,
           createDto.id_destino,
+          createDto.dias_estadia || 1, // 💡 Guardamos los días, por defecto 1
         ],
       );
 
@@ -111,11 +115,25 @@ export class ExperienciasService {
     await queryRunner.startTransaction();
 
     try {
-      // A. Actualizar la tabla principal (Resumen)
+      // A. Actualizar la tabla principal (Resumen y/o Días)
+      const updates: string[] = []; // 💡 Le decimos que será un arreglo de textos
+      const values: any[] = []; // 💡 Le decimos que puede ser cualquier cosa (texto o número)
+
       if (updateDto.resumen_experiencia) {
+        updates.push('resumen_experiencia = ?');
+        values.push(updateDto.resumen_experiencia);
+      }
+
+      if (updateDto.dias_estadia) {
+        updates.push('dias_estadia = ?');
+        values.push(updateDto.dias_estadia);
+      }
+
+      if (updates.length > 0) {
+        values.push(id); // Añadimos el ID al final para el WHERE
         await queryRunner.query(
-          `UPDATE experiencias_u SET resumen_experiencia = ? WHERE id_exp = ?`,
-          [updateDto.resumen_experiencia, id],
+          `UPDATE experiencias_u SET ${updates.join(', ')} WHERE id_exp = ?`,
+          values,
         );
       }
 
@@ -181,8 +199,64 @@ export class ExperienciasService {
   // 💡 PARA EL PANEL DE ADMINISTRADOR: Obtener todas las experiencias cruzadas
   async findAllAdmin() {
     return await this.experienciaRepository.find({
-      relations: ['usuario', 'destino', 'costos', 'valoraciones'],
+      relations: [
+        'usuario',
+        'destino',
+        'costos',
+        'valoraciones',
+        'comentarios',
+        'comentarios.usuario',
+      ],
       order: { fecha_viaje: 'DESC' },
     });
+  }
+
+  // ==========================================
+  // 🌟 SECCIÓN: COMENTARIOS Y LIKES
+  // ==========================================
+
+  // 1. Crear un comentario (o responder a uno si viene id_respuesta_a)
+  async crearComentario(
+    idExperiencia: number,
+    idUsuario: number,
+    mensaje: string,
+    idRespuestaA?: number,
+  ) {
+    const nuevoComentario = this.comentarioRepository.create({
+      mensaje: mensaje,
+      experiencia: { id_exp: idExperiencia },
+      usuario: { id_u: idUsuario },
+      comentarioPadre: idRespuestaA ? { id_c: idRespuestaA } : undefined, // 💡 Si es respuesta, lo enlazamos
+    });
+    return await this.comentarioRepository.save(nuevoComentario);
+  }
+
+  // 2. Dar Like a un comentario
+  async darLikeComentario(idComentario: number) {
+    const comentario = await this.comentarioRepository.findOne({
+      where: { id_c: idComentario },
+    });
+    if (!comentario) {
+      throw new NotFoundException(
+        `El comentario con ID ${idComentario} no existe.`,
+      );
+    }
+    // Incrementamos el contador
+    comentario.likes += 1;
+    return await this.comentarioRepository.save(comentario);
+  }
+
+  // 3. Eliminar comentario
+  async eliminarComentario(idComentario: number) {
+    const comentario = await this.comentarioRepository.findOne({
+      where: { id_c: idComentario },
+    });
+    if (!comentario) {
+      throw new NotFoundException(
+        `El comentario con ID ${idComentario} no existe.`,
+      );
+    }
+    // Gracias a onDelete: 'CASCADE' en la entidad, borrar el padre borra las respuestas
+    return await this.comentarioRepository.remove(comentario);
   }
 }

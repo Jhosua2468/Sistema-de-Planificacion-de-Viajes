@@ -23,11 +23,13 @@ export class ExperienciaU {
   @Column({ type: 'date' })
   fecha_viaje!: string;
 
-  //foto opcional de la experiencia, el usuario puede subir una foto representativa de su viaje, pero no es obligatorio. Si no se proporciona una URL, el valor será null en la base de datos, lo cual es perfectamente válido.
-  @Column({ nullable: true }) // Opcional
+  // 💡 NUEVO CAMPO: Días de estadía reales
+  @Column({ type: 'int', default: 1 })
+  dias_estadia!: number;
+
+  @Column({ nullable: true })
   url_foto?: string;
 
-  // En el SQL se llama id_usuario y id_destino. JoinColumn asegura que TypeORM use esos nombres.
   @ManyToOne(() => Usuario, (usuario) => usuario.experiencias)
   @JoinColumn({ name: 'id_usuario' })
   usuario!: Usuario;

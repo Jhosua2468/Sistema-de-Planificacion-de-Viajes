@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   CreateDateColumn,
   JoinColumn,
 } from 'typeorm';
@@ -20,6 +21,10 @@ export class Comentario {
   @CreateDateColumn()
   fecha_comentario!: Date;
 
+  // 💡 NUEVO: Contador de likes
+  @Column({ type: 'int', default: 0 })
+  likes!: number;
+
   @ManyToOne(() => ExperienciaU, (exp) => exp.comentarios)
   @JoinColumn({ name: 'id_experiencia' })
   experiencia!: ExperienciaU;
@@ -27,4 +32,15 @@ export class Comentario {
   @ManyToOne(() => Usuario, (usuario) => usuario.comentarios)
   @JoinColumn({ name: 'id_usuario' })
   usuario!: Usuario;
+
+  // 💡 NUEVO: Relación de "Padre a Hijo" para las respuestas a comentarios
+  @ManyToOne(() => Comentario, (comentario) => comentario.respuestas, {
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'id_respuesta_a' })
+  comentarioPadre!: Comentario;
+
+  @OneToMany(() => Comentario, (comentario) => comentario.comentarioPadre)
+  respuestas!: Comentario[];
 }

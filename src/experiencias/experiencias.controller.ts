@@ -43,6 +43,7 @@ export class ExperienciasController {
   @UseGuards(JwtAuthGuard)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateData: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     return this.experienciasService.update(+id, updateData);
   }
 
@@ -58,5 +59,39 @@ export class ExperienciasController {
   @Get()
   findAllAdmin() {
     return this.experienciasService.findAllAdmin();
+  }
+
+  // ==========================================
+  // 🌟 RUTAS PARA COMENTARIOS
+  // ==========================================
+
+  // 1. Crear un comentario (Requiere estar logueado)
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/comentarios')
+  crearComentario(
+    @Param('id') idExperiencia: string,
+    @Body('id_usuario') idUsuario: number,
+    @Body('mensaje') mensaje: string,
+    @Body('id_respuesta_a') idRespuestaA?: number, // Opcional
+  ) {
+    return this.experienciasService.crearComentario(
+      +idExperiencia,
+      idUsuario,
+      mensaje,
+      idRespuestaA,
+    );
+  }
+
+  // 2. Dar Like (Ruta pública para que cualquiera pueda dar like, o protegida si prefieres)
+  @Patch('comentarios/:idC/like')
+  darLikeComentario(@Param('idC') idComentario: string) {
+    return this.experienciasService.darLikeComentario(+idComentario);
+  }
+
+  // 3. Eliminar comentario (Requiere login)
+  @UseGuards(JwtAuthGuard)
+  @Delete('comentarios/:idC')
+  eliminarComentario(@Param('idC') idComentario: string) {
+    return this.experienciasService.eliminarComentario(+idComentario);
   }
 }

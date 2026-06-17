@@ -95,6 +95,28 @@ export class DestinosController {
     );
   }
 
+  // 💡 NUEVA RUTA: SUGERIR ATRACTIVO (Usuarios logueados)
+  @UseGuards(JwtAuthGuard)
+  @Post('atractivos/sugerir-completo')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
+  sugerirAtractivoCompleto(
+    @Body() sugerenciaData: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.destinosService.sugerirAtractivoCompleto(sugerenciaData, file);
+  }
+
   // =======================================================
   // 🌟 SECCIÓN 2: DESTINOS
   // =======================================================
@@ -123,6 +145,35 @@ export class DestinosController {
   @Get()
   findAll() {
     return this.destinosService.findAll();
+  }
+
+  // 💡 NUEVO: RUTA PARA SUGERIR DESTINOS (Acceso a Usuarios)
+  @UseGuards(JwtAuthGuard)
+  @Post('sugerir')
+  sugerirDestino(@Body() sugerenciaData: any) {
+    return this.destinosService.sugerirDestino(sugerenciaData);
+  }
+
+  // 💡 NUEVO: RUTA PARA SUGERENCIA COMPLETA (Usuarios logueados)
+  @UseGuards(JwtAuthGuard)
+  @Post('sugerir-completo')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
+  sugerirDestinoCompleto(
+    @Body() sugerenciaData: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.destinosService.sugerirDestinoCompleto(sugerenciaData, file);
   }
 
   // CREAR DESTINO (Todo en Uno: Texto + Foto)
@@ -161,6 +212,13 @@ export class DestinosController {
     @Body() updateData: Record<string, any>,
   ) {
     return this.destinosService.updateDestino(+id, updateData);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Delete(':id')
+  eliminarDestino(@Param('id') id: string) {
+    return this.destinosService.eliminarDestino(+id);
   }
 
   // =======================================================

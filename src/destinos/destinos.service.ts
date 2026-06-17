@@ -49,6 +49,38 @@ export class DestinosService {
     return destinoGuardado;
   }
 
+  // 💡 NUEVO: SUGERIR DESTINO (Para Viajeros)
+  async sugerirDestino(data: any) {
+    const nuevoDestino = this.destinoRepository.create({
+      nombre: data.nombre,
+      descripcion_general:
+        'Destino sugerido por la comunidad. Pendiente de revisión por el Administrador.',
+      estado: EstadoAprobacion.PENDIENTE,
+      departamento: { id_dep: Number(data.id_dep) },
+    });
+    return await this.destinoRepository.save(nuevoDestino);
+  }
+  // 💡 NUEVO: SUGERENCIA COMPLETA DE DESTINO (Con Foto)
+  async sugerirDestinoCompleto(data: any, file?: Express.Multer.File) {
+    const nuevoDestino = this.destinoRepository.create({
+      nombre: data.nombre,
+      descripcion_general: data.descripcion_general,
+      estado: EstadoAprobacion.PENDIENTE, // 💡 Forzado por seguridad
+      departamento: { id_dep: Number(data.id_dep) },
+    });
+
+    const destinoGuardado = await this.destinoRepository.save(nuevoDestino);
+
+    if (file) {
+      const nuevaImagen = this.imagenRepository.create({
+        url: `/uploads/${file.filename}`,
+        destino: { id_d: destinoGuardado.id_d },
+      });
+      await this.imagenRepository.save(nuevaImagen);
+    }
+    return destinoGuardado;
+  }
+
   // LISTAR TODOS LOS DESTINOS (Catálogo)
   async findAll() {
     return await this.destinoRepository.find({
@@ -123,14 +155,16 @@ export class DestinosService {
   // LISTAR TODOS (ADMIN)
   async findAllAdmin() {
     return await this.destinoRepository.find({
-      relations: ['departamento', 'imagenes'],
+      relations: ['departamento', 'imagenes', 'mesesIdeales'],
     });
   }
 
   // ACTUALIZAR DESTINO
   async updateDestino(id_destino: number, updateData: Record<string, any>) {
+    // 💡 Traemos los mesesIdeales para que TypeORM sepa que vamos a actualizar esa relación
     const destino = await this.destinoRepository.findOne({
       where: { id_d: id_destino },
+      relations: ['mesesIdeales'],
     });
 
     if (!destino) {
@@ -142,7 +176,29 @@ export class DestinosService {
       destino.descripcion_general = updateData.descripcion_general;
     if (updateData.estado) destino.estado = updateData.estado;
 
+    // 💡 NUEVO: Si el admin envía un arreglo de meses, actualizamos la tabla puente
+    if (updateData.mesesIdeales !== undefined) {
+      // Mapeamos el arreglo de números [1, 2, 3] a objetos [{id_mes: 1}, {id_mes: 2}...]
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      destino.mesesIdeales = updateData.mesesIdeales.map((id: number) => ({
+        id_mes: id,
+      }));
+    }
+
     return await this.destinoRepository.save(destino);
+  }
+
+  // ELIMINAR DESTINO
+  async eliminarDestino(id_destino: number) {
+    const destino = await this.destinoRepository.findOne({
+      where: { id_d: id_destino },
+    });
+
+    if (!destino) {
+      throw new NotFoundException(`El destino con ID ${id_destino} no existe.`);
+    }
+
+    return await this.destinoRepository.remove(destino);
   }
 
   // ELIMINAR IMAGEN
@@ -169,6 +225,11 @@ export class DestinosService {
         'mesesIdeales',
         'experiencias',
         'experiencias.usuario',
+        'experiencias.costos', // 💡 Faltaba para calcular el total
+        'experiencias.valoraciones', // 💡 Faltaba para las estrellas
+        'experiencias.comentarios', // 💡 Traemos los comentarios
+        'experiencias.comentarios.usuario', // 💡 Traemos quién comentó
+        'experiencias.comentarios.comentarioPadre', // 💡 Traemos si es una respuesta
       ],
     });
 
@@ -238,5 +299,26 @@ export class DestinosService {
     });
     await this.imagenRepository.save(nuevaImagen);
     return { message: 'Imagen enlazada al atractivo', url_guardada: url };
+  }
+
+  // SUGERENCIA COMPLETA DE ATRACTIVO (Usuarios)
+  async sugerirAtractivoCompleto(data: any, file?: Express.Multer.File) {
+    const nuevoAtractivo = this.atractivoRepository.create({
+      nombre: data.nombre,
+      descripcion: data.descripcion,
+      estado: EstadoAprobacion.PENDIENTE, // 💡 Forzado por seguridad
+      destino: { id_d: Number(data.id_destino) },
+    });
+
+    const guardado = await this.atractivoRepository.save(nuevoAtractivo);
+
+    if (file) {
+      const nuevaImagen = this.imagenRepository.create({
+        url: `/uploads/${file.filename}`,
+        atractivo: { id_at: guardado.id_at },
+      });
+      await this.imagenRepository.save(nuevaImagen);
+    }
+    return guardado;
   }
 }

@@ -27,6 +27,11 @@ export class CreateExperienciaDto {
   @IsNumber()
   puntuacion!: number; // 💡 ¡Faltaba esto para las estrellas!
 
+  // 💡 NUEVO CAMPO AÑADIDO
+  @IsOptional()
+  @IsNumber()
+  dias_estadia?: number;
+
   @IsNumber()
   id_usuario!: number;
 
